@@ -5,33 +5,6 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 
-const FUNNEL_STAGES = [
-  { value: 'stranger', label: 'Stranger - No prior contact' },
-  { value: 'aware', label: 'Aware - They know of you' },
-  { value: 'engaged', label: 'Engaged - Active conversation' },
-  { value: 'prospect', label: 'Prospect - Potential client' },
-  { value: 'client', label: 'Client - Paying customer' },
-  { value: 'advocate', label: 'Advocate - Refers others' },
-];
-
-const RELATIONSHIP_GOALS = [
-  { value: 'new_client', label: 'Convert to Client' },
-  { value: 'partnership', label: 'Strategic Partnership' },
-  { value: 'referral_source', label: 'Referral Source' },
-  { value: 'mentor', label: 'Mentorship' },
-  { value: 'collaboration', label: 'Collaboration' },
-  { value: 'networking', label: 'General Networking' },
-];
-
-const CHANNELS = [
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'email', label: 'Email' },
-  { value: 'whatsapp', label: 'WhatsApp' },
-  { value: 'twitter', label: 'Twitter/X' },
-  { value: 'phone', label: 'Phone' },
-  { value: 'in_person', label: 'In Person' },
-];
-
 export default function NewContactPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -43,9 +16,6 @@ export default function NewContactPage() {
     linkedin_url: '',
     company: '',
     title: '',
-    funnel_stage: 'stranger',
-    relationship_goal: 'new_client',
-    preferred_channel: 'linkedin',
     notes: '',
   });
 
@@ -63,19 +33,21 @@ export default function NewContactPage() {
         return;
       }
 
-      const { error: insertError } = await supabase
+      const { data, error: insertError } = await supabase
         .from('contacts')
         .insert({
           ...formData,
           user_id: user.id,
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) throw insertError;
       
-      router.push('/contacts');
+      // Go to Step 2: Upload Communications
+      router.push(`/contacts/${data.id}/communications`);
     } catch (err: any) {
       setError(err.message || 'Failed to create contact');
-    } finally {
       setLoading(false);
     }
   };
@@ -92,7 +64,28 @@ export default function NewContactPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Add New Contact</h1>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Add New Contact</h1>
+          <p className="text-gray-500 mt-1">Step 1 of 3: Basic Information</p>
+        </div>
+
+        {/* Progress Steps */}
+        <div className="flex items-center mb-8">
+          <div className="flex items-center">
+            <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">1</div>
+            <span className="ml-2 text-sm font-medium text-blue-600">Contact Info</span>
+          </div>
+          <div className="flex-1 h-0.5 bg-gray-200 mx-4"></div>
+          <div className="flex items-center">
+            <div className="w-8 h-8 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center text-sm font-medium">2</div>
+            <span className="ml-2 text-sm text-gray-500">Communications</span>
+          </div>
+          <div className="flex-1 h-0.5 bg-gray-200 mx-4"></div>
+          <div className="flex items-center">
+            <div className="w-8 h-8 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center text-sm font-medium">3</div>
+            <span className="ml-2 text-sm text-gray-500">Voice Coach</span>
+          </div>
+        </div>
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md">
@@ -100,36 +93,22 @@ export default function NewContactPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Info */}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Full Name *
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="John Smith"
+            />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Full Name *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="John Smith"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="john@company.com"
-              />
-            </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Company
@@ -157,7 +136,19 @@ export default function NewContactPage() {
             </div>
           </div>
 
-          {/* LinkedIn URL */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email
+            </label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="john@company.com"
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               LinkedIn Profile URL
@@ -171,76 +162,20 @@ export default function NewContactPage() {
             />
           </div>
 
-          {/* Strategic Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Funnel Stage
-              </label>
-              <select
-                value={formData.funnel_stage}
-                onChange={(e) => setFormData({ ...formData, funnel_stage: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {FUNNEL_STAGES.map((stage) => (
-                  <option key={stage.value} value={stage.value}>
-                    {stage.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Relationship Goal
-              </label>
-              <select
-                value={formData.relationship_goal}
-                onChange={(e) => setFormData({ ...formData, relationship_goal: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {RELATIONSHIP_GOALS.map((goal) => (
-                  <option key={goal.value} value={goal.value}>
-                    {goal.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Preferred Channel
-              </label>
-              <select
-                value={formData.preferred_channel}
-                onChange={(e) => setFormData({ ...formData, preferred_channel: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {CHANNELS.map((channel) => (
-                  <option key={channel.value} value={channel.value}>
-                    {channel.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Notes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes
+              Notes (optional)
             </label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={4}
+              rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Any context about this contact, how you met, shared interests, etc."
+              placeholder="How do you know this person? Any context..."
             />
           </div>
 
-          {/* Submit */}
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-3 pt-4">
             <Link
               href="/contacts"
               className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
@@ -250,9 +185,9 @@ export default function NewContactPage() {
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
             >
-              {loading ? 'Creating...' : 'Create Contact'}
+              {loading ? 'Creating...' : 'Next: Add Communications →'}
             </button>
           </div>
         </form>
