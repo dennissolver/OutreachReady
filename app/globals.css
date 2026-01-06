@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { --foreground-rgb: 15, 23, 42; --background-rgb: 255, 255, 255; }
+body { color: rgb(var(--foreground-rgb)); background: rgb(var(--background-rgb)); }
+
+.stage-cold { @apply bg-slate-100 text-slate-800; }
+.stage-aware { @apply bg-amber-100 text-amber-800; }
+.stage-engaged { @apply bg-blue-100 text-blue-800; }
+.stage-interested { @apply bg-green-100 text-green-800; }
+.stage-evaluating { @apply bg-purple-100 text-purple-800; }
+.stage-converted { @apply bg-emerald-100 text-emerald-800; }
+.stage-nurture { @apply bg-gray-100 text-gray-800; }
+
+.goal-client { @apply bg-emerald-100 text-emerald-800; }
+.goal-partner { @apply bg-blue-100 text-blue-800; }
+.goal-investor { @apply bg-amber-100 text-amber-800; }
+.goal-collaborator { @apply bg-purple-100 text-purple-800; }
+.goal-referrer { @apply bg-pink-100 text-pink-800; }
+.goal-advisor { @apply bg-indigo-100 text-indigo-800; }
+.goal-network { @apply bg-gray-100 text-gray-800; }
+
+@keyframes pulse-voice { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+.voice-active { animation: pulse-voice 1.5s ease-in-out infinite; }
