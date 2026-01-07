@@ -82,11 +82,48 @@ export default function VoiceCoachPage() {
     setLoading(false);
   };
 
+  const startVoiceSession = async () => {
+    setIsSessionActive(true);
+    
+    // Initialize ElevenLabs conversation
+    // The agent will have context about the contact and communications
+    try {
+      const { Conversation } = await import('@11labs/client');
+      
+      const conversation = await Conversation.startSession({
+        agentId: process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID!,
+        dynamicVariables: {
+          contact_name: contact?.name || '',
+          contact_company: contact?.company || '',
+          contact_title: contact?.title || '',
+          communications_context: communications || 'No previous communications provided.',
+        },
+        onMessage: (message) => {
+          console.log('Agent message:', message);
+        },
+        onModeChange: (mode) => {
+          console.log('Mode changed:', mode);
+        },
+        onError: (error) => {
+          console.error('Conversation error:', error);
+          setIsSessionActive(false);
+        },
+        onDisconnect: () => {
+          setIsSessionActive(false);
+        },
+      });
 
-const startVoiceSession = async () => {
-    // Voice integration coming soon - use manual mode for now
-    setManualMode(true);
+      // Store conversation reference for cleanup
+      (window as any).elevenLabsConversation = conversation;
+      
+    } catch (error) {
+      console.error('Failed to start voice session:', error);
+      setIsSessionActive(false);
+      // Fall back to manual mode
+      setManualMode(true);
+    }
   };
+
   const endVoiceSession = async () => {
     const conversation = (window as any).elevenLabsConversation;
     if (conversation) {
