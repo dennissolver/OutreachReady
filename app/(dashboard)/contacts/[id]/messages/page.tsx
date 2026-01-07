@@ -17,7 +17,15 @@ interface GeneratedMessage {
   variant: string;
   tone: string;
   channel: string;
+  product_pitched: string | null;
 }
+
+const VARIANT_LABELS: Record<string, { label: string; icon: string; color: string }> = {
+  direct: { label: 'Direct', icon: '🎯', color: 'bg-red-100 text-red-700' },
+  value: { label: 'Value-First', icon: '💎', color: 'bg-green-100 text-green-700' },
+  curiosity: { label: 'Curiosity', icon: '🤔', color: 'bg-yellow-100 text-yellow-700' },
+  relationship: { label: 'Relationship', icon: '🤝', color: 'bg-blue-100 text-blue-700' },
+};
 
 export default function MessagesPage() {
   const router = useRouter();
@@ -44,7 +52,7 @@ export default function MessagesPage() {
       .from('contacts')
       .select('id, name, company')
       .eq('id', contactId)
-      .single();
+      .maybeSingle();
 
     if (!contactData) {
       router.push('/contacts');
@@ -52,14 +60,20 @@ export default function MessagesPage() {
     }
     setContact(contactData);
 
-    // Load generated messages for this session
-    const { data: messagesData } = await supabase
+    // Load generated messages
+    let query = supabase
       .from('generated_messages')
       .select('*')
       .eq('contact_id', contactId)
-      .order('created_at', { ascending: false })
-      .limit(5);
+      .order('created_at', { ascending: false });
 
+    if (sessionId) {
+      query = query.eq('session_id', sessionId);
+    } else {
+      query = query.limit(4);
+    }
+
+    const { data: messagesData } = await query;
     setMessages(messagesData || []);
     setLoading(false);
   };
@@ -86,7 +100,7 @@ export default function MessagesPage() {
     const selectedMessage = messages.find(m => m.id === selectedId);
     if (!selectedMessage) return;
 
-    // Log as communication
+    // Log as sent communication
     await supabase.from('communications').insert({
       contact_id: contactId,
       user_id: user.id,
@@ -95,17 +109,13 @@ export default function MessagesPage() {
       content: selectedMessage.content,
     });
 
-    // Update last contact date
+    // Update contact's last contact date
     await supabase
       .from('contacts')
       .update({ last_contact_date: new Date().toISOString() })
       .eq('id', contactId);
 
     router.push(`/contacts/${contactId}`);
-  };
-
-  const regenerate = () => {
-    router.push(`/contacts/${contactId}/coach`);
   };
 
   if (loading) {
@@ -119,11 +129,8 @@ export default function MessagesPage() {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
-        <Link 
-          href={`/contacts/${contactId}/coach`}
-          className="text-blue-600 hover:text-blue-800 text-sm"
-        >
-          ← Back to Voice Coach
+        <Link href={`/contacts/${contactId}/coach`} className="text-blue-600 hover:text-blue-800 text-sm">
+          ← Back to AI Coach
         </Link>
       </div>
 
@@ -133,124 +140,133 @@ export default function MessagesPage() {
             Messages for {contact?.name}
           </h1>
           <p className="text-gray-500 mt-1">
-            Select the message that fits best, copy it, and send via your channel
+            {messages.length > 0 
+              ? `Select the best message, copy it, and send to ${contact?.name}`
+              : 'No messages generated yet'}
           </p>
         </div>
 
-        {/* Success Banner */}
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center">
-            <svg className="w-5 h-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <span className="text-green-800 font-medium">
-              {messages.length} message options generated!
-            </span>
-          </div>
-        </div>
-
-        {/* Message Options */}
-        <div className="space-y-4">
-          {messages.map((message, index) => (
-            <div 
-              key={message.id}
-              className={`border rounded-lg p-4 transition-all cursor-pointer ${
-                selectedId === message.id 
-                  ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-              onClick={() => setSelectedId(message.id)}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">
-                    Option {index + 1}
-                  </span>
-                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full capitalize">
-                    {message.tone}
-                  </span>
-                  <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full capitalize">
-                    {message.channel?.replace('_', ' ')}
-                  </span>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    copyToClipboard(message);
-                  }}
-                  className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${
-                    copiedId === message.id
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {copiedId === message.id ? '✓ Copied!' : 'Copy'}
-                </button>
+        {messages.length > 0 ? (
+          <>
+            {/* Success indicator */}
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center">
+              <span className="text-2xl mr-3">✨</span>
+              <div>
+                <p className="font-medium text-green-800">{messages.length} message options ready!</p>
+                <p className="text-sm text-green-700">Each takes a different approach - pick what feels right</p>
               </div>
-              
-              <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">
-                {message.content}
-              </p>
-
-              {selectedId === message.id && (
-                <div className="mt-3 pt-3 border-t border-blue-200">
-                  <p className="text-sm text-blue-700">
-                    ✓ Selected - Copy this message and send it to {contact?.name}
-                  </p>
-                </div>
-              )}
             </div>
-          ))}
-        </div>
 
-        {messages.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
-            <p>No messages generated yet.</p>
-            <button
-              onClick={regenerate}
-              className="mt-2 text-blue-600 hover:underline"
+            {/* Messages */}
+            <div className="space-y-4">
+              {messages.map((message) => {
+                const variant = VARIANT_LABELS[message.variant] || VARIANT_LABELS.direct;
+                const isSelected = selectedId === message.id;
+                
+                return (
+                  <div 
+                    key={message.id}
+                    onClick={() => setSelectedId(message.id)}
+                    className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                      isSelected 
+                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${variant.color}`}>
+                          {variant.icon} {variant.label}
+                        </span>
+                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                          {message.channel?.replace('_', ' ')}
+                        </span>
+                        {message.product_pitched && (
+                          <span className="px-2 py-1 bg-purple-100 text-purple-600 rounded-full text-xs">
+                            {message.product_pitched}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          copyToClipboard(message);
+                        }}
+                        className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                          copiedId === message.id
+                            ? 'bg-green-500 text-white'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
+                      >
+                        {copiedId === message.id ? '✓ Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    
+                    <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">
+                      {message.content}
+                    </p>
+
+                    {isSelected && (
+                      <div className="mt-3 pt-3 border-t border-blue-200 flex items-center justify-between">
+                        <p className="text-sm text-blue-700">
+                          ✓ Selected
+                        </p>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            markAsSent();
+                          }}
+                          className="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
+                        >
+                          Mark as Sent
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Actions */}
+            <div className="mt-8 pt-6 border-t flex justify-between items-center">
+              <Link
+                href={`/contacts/${contactId}/coach`}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                ← Regenerate
+              </Link>
+
+              <Link
+                href={`/contacts/${contactId}`}
+                className="px-4 py-2 text-blue-600 hover:text-blue-800"
+              >
+                View Contact →
+              </Link>
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-gray-500 mb-4">No messages generated yet.</p>
+            <Link
+              href={`/contacts/${contactId}/coach`}
+              className="text-blue-600 hover:text-blue-800 font-medium"
             >
-              Go back and generate messages
-            </button>
+              Go to AI Coach to generate messages →
+            </Link>
           </div>
         )}
 
-        {/* Actions */}
-        <div className="mt-8 pt-6 border-t flex justify-between items-center">
-          <button
-            onClick={regenerate}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-          >
-            ← Regenerate
-          </button>
-
-          <div className="flex gap-3">
-            <Link
-              href={`/contacts/${contactId}`}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-            >
-              View Contact
-            </Link>
-            {selectedId && (
-              <button
-                onClick={markAsSent}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-              >
-                Mark as Sent ✓
-              </button>
-            )}
-          </div>
-        </div>
-
         {/* Tips */}
-        <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <h4 className="font-medium text-yellow-800 mb-2">💡 Tips</h4>
-          <ul className="text-sm text-yellow-700 space-y-1">
-            <li>• Feel free to edit the message before sending</li>
-            <li>• Personalize with specific details you know about them</li>
-            <li>• "Mark as Sent" logs this in your communication history</li>
-          </ul>
-        </div>
+        {messages.length > 0 && (
+          <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <h4 className="font-medium text-amber-800 mb-2">💡 Pro Tips</h4>
+            <ul className="text-sm text-amber-700 space-y-1">
+              <li>• Feel free to edit before sending - add personal touches</li>
+              <li>• The "Value-First" approach often gets best response rates</li>
+              <li>• "Mark as Sent" logs this to your communication history</li>
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );

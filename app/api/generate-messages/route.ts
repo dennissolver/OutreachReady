@@ -9,7 +9,16 @@ const openai = new OpenAI({
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { contactId, contact, communications, channel, objective, tone } = body;
+    const { 
+      contactId, 
+      contact, 
+      seller, 
+      communications, 
+      channel, 
+      objective, 
+      product, 
+      tone 
+    } = body;
 
     if (!contactId || !objective) {
       return NextResponse.json(
@@ -28,65 +37,66 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build the prompt
-    const channelGuidelines = getChannelGuidelines(channel);
+    // Build comprehensive prompt
+    const channelGuide = getChannelGuidelines(channel);
     
-    const prompt = `You are an expert outreach strategist helping craft the perfect message.
+    const prompt = `You are an expert B2B sales strategist and copywriter. Your job is to craft the perfect outreach message.
 
-CONTACT INFORMATION:
+## CONTEXT ABOUT THE BUYER (Who you're messaging)
 - Name: ${contact?.name || 'Unknown'}
-- Company: ${contact?.company || 'Unknown'}
 - Title: ${contact?.title || 'Unknown'}
+- Company: ${contact?.company || 'Unknown'}
+- Company Website: ${contact?.website || 'Not provided'}
+- LinkedIn: ${contact?.linkedin || 'Not provided'}
+- Notes: ${contact?.notes || 'None'}
 
-PREVIOUS COMMUNICATIONS:
-${communications || 'No previous communications provided.'}
+## CONTEXT ABOUT THE SELLER (Who is sending the message)
+- Company: ${seller?.company || 'Not specified'}
+- Website: ${seller?.website || 'Not specified'}
+- Products Page: ${seller?.productsUrl || 'Not specified'}
+- Offering Description: ${seller?.productDescription || 'Not specified'}
 
-MESSAGE REQUIREMENTS:
-- Channel: ${channel} (${channelGuidelines})
+## PREVIOUS COMMUNICATIONS
+${communications || 'No previous communications provided. This may be a cold outreach.'}
+
+## MESSAGE REQUIREMENTS
+- Channel: ${channel} 
+- Channel Guidelines: ${channelGuide}
+- Product/Service to Pitch: ${product}
 - Objective: ${objective}
 - Tone: ${tone}
 
-Generate 4 different message options that:
-1. Are appropriate for the ${channel} channel
-2. Work toward the objective: "${objective}"
-3. Maintain a ${tone} tone
-4. Reference previous communications naturally if provided
-5. Feel authentic and human (not generic or templated)
+## YOUR TASK
+Generate 4 different message variants. Each should:
 
-Each message should have a different approach:
-- Option 1: Direct and clear
-- Option 2: Story-driven or curiosity-based
-- Option 3: Value-first (lead with what you can offer)
-- Option 4: Relationship-focused (personal connection)
+1. Be appropriate for ${channel} (follow the length and format guidelines)
+2. Reference the relationship context from previous communications (if provided)
+3. Subtly connect the seller's offering (${product}) to the buyer's likely needs
+4. Work toward the objective: "${objective}"
+5. Use a ${tone} tone
+6. Feel authentic and human - NOT like a generic sales template
+7. Include a clear but soft call-to-action
 
-Return as JSON array with this structure:
+Each variant should take a different approach:
+- **Direct**: Clear, straightforward ask
+- **Value-First**: Lead with insight or value for them
+- **Curiosity**: Spark interest with a question or observation  
+- **Relationship**: Focus on the connection, less salesy
+
+Return ONLY a JSON array with this exact structure (no markdown, no explanation):
 [
-  {
-    "variant": "direct",
-    "content": "message text here"
-  },
-  {
-    "variant": "curiosity",
-    "content": "message text here"
-  },
-  {
-    "variant": "value",
-    "content": "message text here"
-  },
-  {
-    "variant": "relationship",
-    "content": "message text here"
-  }
-]
-
-Only return the JSON array, no other text.`;
+  {"variant": "direct", "content": "message text here"},
+  {"variant": "value", "content": "message text here"},
+  {"variant": "curiosity", "content": "message text here"},
+  {"variant": "relationship", "content": "message text here"}
+]`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
       messages: [
         {
           role: 'system',
-          content: 'You are an expert at crafting personalized outreach messages. Return only valid JSON.',
+          content: 'You are an expert B2B sales copywriter. Return ONLY valid JSON arrays. No markdown code blocks, no explanations.',
         },
         {
           role: 'user',
@@ -94,15 +104,14 @@ Only return the JSON array, no other text.`;
         },
       ],
       temperature: 0.8,
-      max_tokens: 2000,
+      max_tokens: 2500,
     });
 
     const responseText = completion.choices[0]?.message?.content || '[]';
     
-    // Parse the JSON response
+    // Parse JSON response
     let messages;
     try {
-      // Clean up the response (remove markdown code blocks if present)
       const cleanedResponse = responseText
         .replace(/```json\n?/g, '')
         .replace(/```\n?/g, '')
@@ -116,9 +125,10 @@ Only return the JSON array, no other text.`;
       );
     }
 
-    // Save messages to database
+    // Generate session ID
     const sessionId = crypto.randomUUID();
-    
+
+    // Save messages to database
     const messagesToInsert = messages.map((msg: any) => ({
       contact_id: contactId,
       user_id: user.id,
@@ -127,6 +137,9 @@ Only return the JSON array, no other text.`;
       tone: tone,
       content: msg.content,
       variant: msg.variant,
+      product_pitched: product,
+      buyer_context: JSON.stringify(contact),
+      seller_context: JSON.stringify(seller),
     }));
 
     const { error: insertError } = await supabase
@@ -135,7 +148,7 @@ Only return the JSON array, no other text.`;
 
     if (insertError) {
       console.error('Failed to save messages:', insertError);
-      // Continue anyway - messages were generated
+      // Continue anyway - we generated the messages
     }
 
     return NextResponse.json({
@@ -155,13 +168,13 @@ Only return the JSON array, no other text.`;
 
 function getChannelGuidelines(channel: string): string {
   const guidelines: Record<string, string> = {
-    linkedin_dm: 'Keep under 300 characters for best engagement. Be professional but personable.',
-    linkedin_comment: 'Keep brief, add value to the conversation, reference their post content.',
-    linkedin_connection: 'Must be under 300 characters. Give a reason to connect.',
-    email: 'Can be longer. Include clear subject line suggestion. Professional format.',
-    whatsapp: 'Casual, conversational. Can use line breaks. Keep it mobile-friendly.',
-    twitter_dm: 'Brief and direct. Under 280 characters preferred.',
-    sms: 'Very short. Under 160 characters. Get to the point.',
+    linkedin_dm: 'Keep under 300 characters for best engagement. Be professional but warm. No formal salutations needed.',
+    linkedin_comment: 'Keep brief (1-3 sentences). Add value to their post. Reference something specific they said.',
+    linkedin_connection: 'MUST be under 300 characters. Give a compelling reason to connect. Be specific, not generic.',
+    email: 'Can be longer (150-250 words). Include a subject line suggestion at the start. Professional format but personable.',
+    email_followup: 'Shorter than initial email. Reference the previous touchpoint. Add new value or angle.',
+    whatsapp: 'Casual and conversational. Use line breaks for readability. Keep it mobile-friendly. Can use occasional emoji.',
+    sms: 'Very short (under 160 chars). Get to the point immediately. Include your name.',
   };
-  return guidelines[channel] || 'Adapt length and tone to the platform.';
+  return guidelines[channel] || 'Adapt length and tone appropriately for the platform.';
 }

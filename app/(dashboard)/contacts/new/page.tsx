@@ -13,9 +13,10 @@ export default function NewContactPage() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    linkedin_url: '',
     company: '',
     title: '',
+    company_website: '',
+    linkedin_url: '',
     notes: '',
   });
 
@@ -44,7 +45,6 @@ export default function NewContactPage() {
 
       if (insertError) throw insertError;
       
-      // Go to Step 2: Upload Communications
       router.push(`/contacts/${data.id}/communications`);
     } catch (err: any) {
       setError(err.message || 'Failed to create contact');
@@ -55,10 +55,7 @@ export default function NewContactPage() {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
-        <Link 
-          href="/contacts"
-          className="text-blue-600 hover:text-blue-800 text-sm"
-        >
+        <Link href="/contacts" className="text-blue-600 hover:text-blue-800 text-sm">
           ← Back to Contacts
         </Link>
       </div>
@@ -66,24 +63,24 @@ export default function NewContactPage() {
       <div className="bg-white rounded-lg shadow-sm border p-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Add New Contact</h1>
-          <p className="text-gray-500 mt-1">Step 1 of 3: Basic Information</p>
+          <p className="text-gray-500 mt-1">Step 1 of 3: Contact Information</p>
         </div>
 
         {/* Progress Steps */}
         <div className="flex items-center mb-8">
           <div className="flex items-center">
             <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">1</div>
-            <span className="ml-2 text-sm font-medium text-blue-600">Contact Info</span>
+            <span className="ml-2 text-sm font-medium text-blue-600">Contact</span>
           </div>
           <div className="flex-1 h-0.5 bg-gray-200 mx-4"></div>
           <div className="flex items-center">
-            <div className="w-8 h-8 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center text-sm font-medium">2</div>
+            <div className="w-8 h-8 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center text-sm">2</div>
             <span className="ml-2 text-sm text-gray-500">Communications</span>
           </div>
           <div className="flex-1 h-0.5 bg-gray-200 mx-4"></div>
           <div className="flex items-center">
-            <div className="w-8 h-8 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center text-sm font-medium">3</div>
-            <span className="ml-2 text-sm text-gray-500">Voice Coach</span>
+            <div className="w-8 h-8 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center text-sm">3</div>
+            <span className="ml-2 text-sm text-gray-500">AI Coach</span>
           </div>
         </div>
 
@@ -94,30 +91,46 @@ export default function NewContactPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Full Name *
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="John Smith"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Full Name *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                placeholder="John Smith"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                placeholder="john@company.com"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Company
+                Company *
               </label>
               <input
                 type="text"
+                required
                 value={formData.company}
                 onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                 placeholder="Acme Corp"
               />
             </div>
@@ -130,7 +143,7 @@ export default function NewContactPage() {
                 type="text"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                 placeholder="CEO"
               />
             </div>
@@ -138,15 +151,18 @@ export default function NewContactPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
+              Company Website
             </label>
             <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="john@company.com"
+              type="url"
+              value={formData.company_website}
+              onChange={(e) => setFormData({ ...formData, company_website: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              placeholder="https://acmecorp.com"
             />
+            <p className="text-xs text-gray-500 mt-1">
+              AI will research this to understand their business and needs
+            </p>
           </div>
 
           <div>
@@ -157,29 +173,26 @@ export default function NewContactPage() {
               type="url"
               value={formData.linkedin_url}
               onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
               placeholder="https://linkedin.com/in/johnsmith"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes (optional)
+              Notes
             </label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="How do you know this person? Any context..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              placeholder="How do you know them? What do they need?"
             />
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
-            <Link
-              href="/contacts"
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-            >
+            <Link href="/contacts" className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
               Cancel
             </Link>
             <button
@@ -187,7 +200,7 @@ export default function NewContactPage() {
               disabled={loading}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
             >
-              {loading ? 'Creating...' : 'Next: Add Communications →'}
+              {loading ? 'Creating...' : 'Next: Communications →'}
             </button>
           </div>
         </form>

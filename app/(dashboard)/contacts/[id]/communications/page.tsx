@@ -22,36 +22,37 @@ export default function CommunicationsPage() {
   const [communications, setCommunications] = useState('');
 
   useEffect(() => {
-    loadContact();
+    loadData();
   }, [contactId]);
 
-  const loadContact = async () => {
+  const loadData = async () => {
     const supabase = createClient();
-    const { data, error } = await supabase
+    
+    // Load contact
+    const { data: contactData, error: contactError } = await supabase
       .from('contacts')
       .select('id, name, company')
       .eq('id', contactId)
-      .single();
+      .maybeSingle();
 
-    if (error || !data) {
+    if (contactError || !contactData) {
+      console.error('Contact not found:', contactError);
       router.push('/contacts');
       return;
     }
-
-    setContact(data);
+    setContact(contactData);
     
-    // Load existing communications if any
+    // Load existing communications context (if any)
     const { data: commData } = await supabase
       .from('communications')
       .select('content')
       .eq('contact_id', contactId)
       .eq('direction', 'context')
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
 
-    if (commData) {
-      setCommunications(commData.content);
+    if (commData && commData.length > 0) {
+      setCommunications(commData[0].content || '');
     }
     
     setLoading(false);
@@ -68,26 +69,31 @@ export default function CommunicationsPage() {
       return;
     }
 
-    // Save communications as context
+    // Save communications as context (insert new, don't upsert)
     if (communications.trim()) {
+      // First delete any existing context for this contact
       await supabase
         .from('communications')
-        .upsert({
+        .delete()
+        .eq('contact_id', contactId)
+        .eq('direction', 'context');
+
+      // Then insert new context
+      const { error } = await supabase
+        .from('communications')
+        .insert({
           contact_id: contactId,
           user_id: user.id,
           channel: 'context',
           direction: 'context',
           content: communications,
-        }, {
-          onConflict: 'contact_id,direction',
         });
+
+      if (error) {
+        console.error('Failed to save communications:', error);
+      }
     }
 
-    // Navigate to Voice Coach
-    router.push(`/contacts/${contactId}/coach`);
-  };
-
-  const handleSkip = () => {
     router.push(`/contacts/${contactId}/coach`);
   };
 
@@ -102,10 +108,7 @@ export default function CommunicationsPage() {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
-        <Link 
-          href="/contacts"
-          className="text-blue-600 hover:text-blue-800 text-sm"
-        >
+        <Link href="/contacts" className="text-blue-600 hover:text-blue-800 text-sm">
           ← Back to Contacts
         </Link>
       </div>
@@ -115,70 +118,71 @@ export default function CommunicationsPage() {
           <h1 className="text-2xl font-bold text-gray-900">
             Communications with {contact?.name}
           </h1>
-          <p className="text-gray-500 mt-1">Step 2 of 3: Share Recent Communications</p>
+          <p className="text-gray-500 mt-1">Step 2 of 3: Share Your Conversation History</p>
         </div>
 
         {/* Progress Steps */}
         <div className="flex items-center mb-8">
           <div className="flex items-center">
-            <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
-              </svg>
-            </div>
-            <span className="ml-2 text-sm text-green-600">Contact Info</span>
+            <div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm">✓</div>
+            <span className="ml-2 text-sm text-green-600">Contact</span>
           </div>
-          <div className="flex-1 h-0.5 bg-blue-600 mx-4"></div>
+          <div className="flex-1 h-0.5 bg-green-500 mx-4"></div>
           <div className="flex items-center">
             <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-medium">2</div>
             <span className="ml-2 text-sm font-medium text-blue-600">Communications</span>
           </div>
           <div className="flex-1 h-0.5 bg-gray-200 mx-4"></div>
           <div className="flex items-center">
-            <div className="w-8 h-8 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center text-sm font-medium">3</div>
-            <span className="ml-2 text-sm text-gray-500">Voice Coach</span>
+            <div className="w-8 h-8 bg-gray-200 text-gray-500 rounded-full flex items-center justify-center text-sm">3</div>
+            <span className="ml-2 text-sm text-gray-500">AI Coach</span>
           </div>
         </div>
 
         <div className="space-y-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="font-medium text-blue-900 mb-2">Why share communications?</h3>
+            <h3 className="font-medium text-blue-900 mb-2">📋 Why share your communications?</h3>
             <p className="text-blue-800 text-sm">
-              Paste your recent emails, LinkedIn messages, WhatsApp chats, or any other 
-              communications with {contact?.name}. This helps the Voice Coach understand 
-              your relationship and craft the perfect next message.
+              The AI will analyze your conversation history with {contact?.name} to:
             </p>
+            <ul className="text-blue-800 text-sm mt-2 space-y-1 ml-4 list-disc">
+              <li>Understand where you are in the relationship</li>
+              <li>Identify their needs and interests</li>
+              <li>Match your products/services to their situation</li>
+              <li>Craft the perfect next message</li>
+            </ul>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Recent Communications
+              Paste your recent communications
             </label>
             <textarea
               value={communications}
               onChange={(e) => setCommunications(e.target.value)}
-              rows={12}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-              placeholder={`Paste your communications here. For example:
+              rows={14}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              placeholder={`Paste any communications you've had with ${contact?.name}. For example:
 
 ---
 LinkedIn DM - Jan 3, 2026
-Me: Hi John, loved your recent post about AI in sales...
-John: Thanks! Yes, we've been exploring that at Acme...
+Me: Hi ${contact?.name}, loved your recent post about digital transformation...
+${contact?.name}: Thanks! Yes, we've been exploring AI solutions at ${contact?.company}...
+Me: That's interesting - we actually help companies with exactly that...
 
 ---
 Email - Dec 28, 2025
-Subject: Following up on our chat
-Hi John, great meeting you at the conference...
+Subject: Following up on our conversation
+Hi ${contact?.name}, great connecting at the conference...
 
 ---
-Just paste everything - no need to format perfectly. The Voice Coach will understand.`}
+Just paste everything as-is. The AI will understand the context.`}
             />
           </div>
 
           <div className="flex justify-between pt-4">
             <button
-              onClick={handleSkip}
+              onClick={() => router.push(`/contacts/${contactId}/coach`)}
               className="px-4 py-2 text-gray-600 hover:text-gray-800"
             >
               Skip for now
@@ -188,7 +192,7 @@ Just paste everything - no need to format perfectly. The Voice Coach will unders
               disabled={saving}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
             >
-              {saving ? 'Saving...' : 'Next: Voice Coach →'}
+              {saving ? 'Saving...' : 'Next: AI Coach →'}
             </button>
           </div>
         </div>
