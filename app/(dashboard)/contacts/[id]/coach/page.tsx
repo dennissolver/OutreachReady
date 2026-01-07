@@ -118,8 +118,8 @@ export default function CoachPage() {
     }
 
     // Dedupe and clean
-    products = [...new Set(products)].slice(0, 6);
-    
+    products = Array.from(new Set(products)).slice(0, 6);
+
     // If we couldn't extract, provide generic options
     if (products.length === 0) {
       products = ['General consultation', 'Custom solution', 'Partnership discussion'];
