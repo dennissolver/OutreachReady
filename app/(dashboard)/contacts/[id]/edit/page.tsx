@@ -5,33 +5,6 @@ import { useRouter, useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import Link from 'next/link';
 
-const FUNNEL_STAGES = [
-  { value: 'stranger', label: 'Stranger' },
-  { value: 'aware', label: 'Aware' },
-  { value: 'engaged', label: 'Engaged' },
-  { value: 'prospect', label: 'Prospect' },
-  { value: 'client', label: 'Client' },
-  { value: 'advocate', label: 'Advocate' },
-];
-
-const RELATIONSHIP_GOALS = [
-  { value: 'new_client', label: 'Convert to Client' },
-  { value: 'partnership', label: 'Strategic Partnership' },
-  { value: 'referral_source', label: 'Referral Source' },
-  { value: 'mentor', label: 'Mentorship' },
-  { value: 'collaboration', label: 'Collaboration' },
-  { value: 'networking', label: 'General Networking' },
-];
-
-const CHANNELS = [
-  { value: 'linkedin', label: 'LinkedIn' },
-  { value: 'email', label: 'Email' },
-  { value: 'whatsapp', label: 'WhatsApp' },
-  { value: 'twitter', label: 'Twitter/X' },
-  { value: 'phone', label: 'Phone' },
-  { value: 'in_person', label: 'In Person' },
-];
-
 export default function EditContactPage() {
   const router = useRouter();
   const params = useParams();
@@ -39,17 +12,18 @@ export default function EditContactPage() {
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    linkedin_url: '',
     company: '',
     title: '',
-    funnel_stage: 'stranger',
-    relationship_goal: 'new_client',
-    preferred_channel: 'linkedin',
+    company_website: '',
+    linkedin_url: '',
+    company_description: '',
     notes: '',
   });
 
@@ -59,19 +33,11 @@ export default function EditContactPage() {
 
   const loadContact = async () => {
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-
     const { data, error } = await supabase
       .from('contacts')
       .select('*')
       .eq('id', contactId)
-      .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (error || !data) {
       router.push('/contacts');
@@ -81,15 +47,60 @@ export default function EditContactPage() {
     setFormData({
       name: data.name || '',
       email: data.email || '',
-      linkedin_url: data.linkedin_url || '',
       company: data.company || '',
       title: data.title || '',
-      funnel_stage: data.funnel_stage || 'stranger',
-      relationship_goal: data.relationship_goal || 'new_client',
-      preferred_channel: data.preferred_channel || 'linkedin',
+      company_website: data.company_website || '',
+      linkedin_url: data.linkedin_url || '',
+      company_description: data.company_description || '',
       notes: data.notes || '',
     });
     setLoading(false);
+  };
+
+  const analyzeWebsite = async () => {
+    if (!formData.company_website) {
+      setError('Please enter a company website first');
+      return;
+    }
+
+    setAnalyzing(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/analyze-website', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: formData.company_website }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.analysis) {
+        const { company_name, description, products, target_audience } = data.analysis;
+        
+        let companyDesc = description || '';
+        if (products && products.length > 0) {
+          companyDesc += `\n\nProducts/Services: ${products.join(', ')}`;
+        }
+        if (target_audience) {
+          companyDesc += `\n\nTarget audience: ${target_audience}`;
+        }
+
+        setFormData(prev => ({
+          ...prev,
+          company: prev.company || company_name || '',
+          company_description: companyDesc.trim(),
+        }));
+
+        setMessage('✨ Website analyzed! Business info extracted.');
+      } else {
+        setError(data.error || 'Could not analyze website');
+      }
+    } catch (err: any) {
+      setError('Analysis failed: ' + err.message);
+    }
+
+    setAnalyzing(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -99,7 +110,7 @@ export default function EditContactPage() {
 
     try {
       const supabase = createClient();
-      
+
       const { error: updateError } = await supabase
         .from('contacts')
         .update(formData)
@@ -125,10 +136,7 @@ export default function EditContactPage() {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
-        <Link 
-          href={`/contacts/${contactId}`}
-          className="text-blue-600 hover:text-blue-800 text-sm"
-        >
+        <Link href={`/contacts/${contactId}`} className="text-blue-600 hover:text-blue-800 text-sm">
           ← Back to Contact
         </Link>
       </div>
@@ -142,7 +150,13 @@ export default function EditContactPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        {message && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-md">
+            {message}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -168,7 +182,9 @@ export default function EditContactPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
               />
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Company
@@ -196,6 +212,32 @@ export default function EditContactPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
+              Company Website
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={formData.company_website}
+                onChange={(e) => setFormData({ ...formData, company_website: e.target.value })}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                placeholder="https://theircompany.com"
+              />
+              <button
+                type="button"
+                onClick={analyzeWebsite}
+                disabled={analyzing || !formData.company_website}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 whitespace-nowrap"
+              >
+                {analyzing ? '...' : '🔍 Analyze'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              AI will extract their business info to help match your offerings
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               LinkedIn Profile URL
             </label>
             <input
@@ -203,54 +245,22 @@ export default function EditContactPage() {
               value={formData.linkedin_url}
               onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              placeholder="https://linkedin.com/in/theirprofile"
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Funnel Stage
-              </label>
-              <select
-                value={formData.funnel_stage}
-                onChange={(e) => setFormData({ ...formData, funnel_stage: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              >
-                {FUNNEL_STAGES.map((stage) => (
-                  <option key={stage.value} value={stage.value}>{stage.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Relationship Goal
-              </label>
-              <select
-                value={formData.relationship_goal}
-                onChange={(e) => setFormData({ ...formData, relationship_goal: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              >
-                {RELATIONSHIP_GOALS.map((goal) => (
-                  <option key={goal.value} value={goal.value}>{goal.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Preferred Channel
-              </label>
-              <select
-                value={formData.preferred_channel}
-                onChange={(e) => setFormData({ ...formData, preferred_channel: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              >
-                {CHANNELS.map((channel) => (
-                  <option key={channel.value} value={channel.value}>{channel.label}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Business Description
+              <span className="text-gray-400 font-normal ml-2">(AI-extracted or manual)</span>
+            </label>
+            <textarea
+              value={formData.company_description}
+              onChange={(e) => setFormData({ ...formData, company_description: e.target.value })}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              placeholder="What does their company do? What problems do they solve?"
+            />
           </div>
 
           <div>
@@ -260,12 +270,13 @@ export default function EditContactPage() {
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={4}
+              rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              placeholder="How do you know them? Any context..."
             />
           </div>
 
-          <div className="flex justify-end gap-3">
+          <div className="flex justify-end gap-3 pt-4">
             <Link
               href={`/contacts/${contactId}`}
               className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
@@ -275,7 +286,7 @@ export default function EditContactPage() {
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>

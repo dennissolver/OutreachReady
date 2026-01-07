@@ -37,58 +37,104 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build comprehensive prompt
+    // ============================================
+    // STEP 1: AUTO-ANALYZE CONTACT'S WEBSITE
+    // ============================================
+    let contactBusinessInfo = '';
+    if (contact?.website) {
+      try {
+        const websiteContent = await fetchWebsiteContent(contact.website);
+        if (websiteContent) {
+          contactBusinessInfo = await analyzeWithAI(
+            `Analyze this business website and extract:
+1. What does this company do?
+2. Who are their customers?
+3. What problems do they solve?
+4. What challenges might they face?
+Be concise (under 150 words).
+
+Website: ${contact.website}
+Content: ${websiteContent}`
+          );
+        }
+      } catch (err) {
+        console.log('Could not analyze contact website:', err);
+      }
+    }
+
+    // ============================================
+    // STEP 2: AUTO-ANALYZE SELLER'S OFFERINGS
+    // ============================================
+    let sellerOfferings = seller?.productDescription || '';
+    if (!sellerOfferings && seller?.productsUrl) {
+      try {
+        const websiteContent = await fetchWebsiteContent(seller.productsUrl);
+        if (websiteContent) {
+          sellerOfferings = await analyzeWithAI(
+            `Extract products and services from this website. List each with a brief description. Be concise.
+
+Content: ${websiteContent}`
+          );
+        }
+      } catch (err) {
+        console.log('Could not analyze seller website:', err);
+      }
+    }
+
+    // ============================================
+    // STEP 3: BUILD AI-LED COMPREHENSIVE PROMPT
+    // ============================================
     const channelGuide = getChannelGuidelines(channel);
     
-    const prompt = `You are an expert B2B sales strategist and copywriter. Your job is to craft the perfect outreach message.
+    const prompt = `You are an expert B2B sales strategist. Analyze everything and create personalized outreach.
 
-## CONTEXT ABOUT THE BUYER (Who you're messaging)
-- Name: ${contact?.name || 'Unknown'}
-- Title: ${contact?.title || 'Unknown'}
-- Company: ${contact?.company || 'Unknown'}
-- Company Website: ${contact?.website || 'Not provided'}
-- LinkedIn: ${contact?.linkedin || 'Not provided'}
-- Notes: ${contact?.notes || 'None'}
+## AUTOMATED ANALYSIS RESULTS
 
-## CONTEXT ABOUT THE SELLER (Who is sending the message)
-- Company: ${seller?.company || 'Not specified'}
-- Website: ${seller?.website || 'Not specified'}
-- Products Page: ${seller?.productsUrl || 'Not specified'}
-- Offering Description: ${seller?.productDescription || 'Not specified'}
+### BUYER ANALYSIS (${contact?.name} at ${contact?.company})
+Title: ${contact?.title || 'Unknown'}
+Website: ${contact?.website || 'Not provided'}
+${contactBusinessInfo ? `
+**AI-ANALYZED BUYER BUSINESS:**
+${contactBusinessInfo}
+` : 'No website data available - use company name to infer.'}
 
-## PREVIOUS COMMUNICATIONS
-${communications || 'No previous communications provided. This may be a cold outreach.'}
+### COMMUNICATION HISTORY
+${communications || 'No previous communications - this is COLD outreach. Be extra compelling.'}
+
+### SELLER OFFERINGS (${seller?.company || 'Our Company'})
+Website: ${seller?.website || 'Not specified'}
+${sellerOfferings ? `
+**PRODUCTS/SERVICES AVAILABLE:**
+${sellerOfferings}
+` : 'General business solutions.'}
+
+## YOUR TASK - DO ALL OF THIS:
+
+1. **MATCH**: Based on buyer's business, which seller offering(s) are most relevant?
+2. **IDENTIFY PAIN**: What specific problem can we solve for them?
+3. **CRAFT MESSAGE**: Create a message that:
+   - Shows we understand THEIR business
+   - Connects our solution to THEIR specific needs
+   - Builds on previous communications (if any)
+   - Moves toward: "${objective}"
 
 ## MESSAGE REQUIREMENTS
-- Channel: ${channel} 
-- Channel Guidelines: ${channelGuide}
-- Product/Service to Pitch: ${product}
-- Objective: ${objective}
+- Channel: ${channel} (${channelGuide})
 - Tone: ${tone}
+- Product focus: ${product || 'Best match from our offerings'}
 
-## YOUR TASK
-Generate 4 different message variants. Each should:
+Generate 4 variants with different approaches:
+- **direct**: Clear value prop + specific ask
+- **value**: Lead with insight about THEIR business challenge
+- **curiosity**: Thought-provoking question about their situation  
+- **relationship**: Connection-focused, softer approach
 
-1. Be appropriate for ${channel} (follow the length and format guidelines)
-2. Reference the relationship context from previous communications (if provided)
-3. Subtly connect the seller's offering (${product}) to the buyer's likely needs
-4. Work toward the objective: "${objective}"
-5. Use a ${tone} tone
-6. Feel authentic and human - NOT like a generic sales template
-7. Include a clear but soft call-to-action
-
-Each variant should take a different approach:
-- **Direct**: Clear, straightforward ask
-- **Value-First**: Lead with insight or value for them
-- **Curiosity**: Spark interest with a question or observation  
-- **Relationship**: Focus on the connection, less salesy
-
-Return ONLY a JSON array with this exact structure (no markdown, no explanation):
+Return ONLY JSON (no markdown):
 [
-  {"variant": "direct", "content": "message text here"},
-  {"variant": "value", "content": "message text here"},
-  {"variant": "curiosity", "content": "message text here"},
-  {"variant": "relationship", "content": "message text here"}
+  {"variant": "direct", "content": "message", "matchReason": "why this offering fits their needs"},
+  {"variant": "value", "content": "message", "matchReason": "why this offering fits"},
+  {"variant": "curiosity", "content": "message", "matchReason": "why this offering fits"},
+  {"variant": "relationship", "content": "message", "matchReason": "why this offering fits"}
 ]`;
 
     const completion = await openai.chat.completions.create({
@@ -177,4 +223,40 @@ function getChannelGuidelines(channel: string): string {
     sms: 'Very short (under 160 chars). Get to the point immediately. Include your name.',
   };
   return guidelines[channel] || 'Adapt length and tone appropriately for the platform.';
+}
+
+async function fetchWebsiteContent(url: string): Promise<string> {
+  try {
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OutreachReady/1.0)' },
+    });
+    const html = await response.text();
+    
+    // Strip HTML tags and get clean text
+    const text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 5000);
+    
+    return text;
+  } catch (err) {
+    console.error('Failed to fetch website:', err);
+    return '';
+  }
+}
+
+async function analyzeWithAI(prompt: string): Promise<string> {
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4-turbo-preview',
+    messages: [
+      { role: 'system', content: 'Be concise and direct. No fluff.' },
+      { role: 'user', content: prompt },
+    ],
+    temperature: 0.3,
+    max_tokens: 400,
+  });
+  return completion.choices[0]?.message?.content || '';
 }

@@ -37,9 +37,27 @@ export default function CoachPage() {
   // AI Coach inputs
   const [channel, setChannel] = useState('linkedin_dm');
   const [objective, setObjective] = useState('');
+  const [customObjective, setCustomObjective] = useState('');
   const [selectedProduct, setSelectedProduct] = useState('');
   const [tone, setTone] = useState('professional');
   const [customProduct, setCustomProduct] = useState('');
+
+  // Preset objectives
+  const OBJECTIVES = [
+    { value: 'discovery_call', label: '📞 Book a discovery call' },
+    { value: 'demo', label: '🎯 Schedule a product demo' },
+    { value: 'meeting', label: '🤝 Set up a meeting' },
+    { value: 'reconnect', label: '🔄 Re-engage / Follow up' },
+    { value: 'intro_product', label: '💡 Introduce our product/service' },
+    { value: 'partnership', label: '🤝 Explore partnership opportunity' },
+    { value: 'referral', label: '🔗 Ask for a referral or introduction' },
+    { value: 'feedback', label: '💬 Get feedback on our offering' },
+    { value: 'event_invite', label: '📅 Invite to event/webinar' },
+    { value: 'content_share', label: '📄 Share valuable content/resource' },
+    { value: 'check_in', label: '👋 Simple check-in / Stay top of mind' },
+    { value: 'close_deal', label: '✅ Move toward closing the deal' },
+    { value: 'other', label: '✏️ Other (custom objective)' },
+  ];
 
   // Product options (will be dynamic based on user's product description)
   const [productOptions, setProductOptions] = useState<string[]>([]);
@@ -129,13 +147,22 @@ export default function CoachPage() {
   };
 
   const generateMessages = async () => {
-    if (!objective.trim()) {
-      setError('Please describe your objective');
+    if (!objective) {
+      setError('Please select an objective');
+      return;
+    }
+    if (objective === 'other' && !customObjective.trim()) {
+      setError('Please describe your custom objective');
       return;
     }
 
     setIsGenerating(true);
     setError(null);
+
+    // Get the actual objective text
+    const objectiveText = objective === 'other' 
+      ? customObjective 
+      : OBJECTIVES.find(o => o.value === objective)?.label || objective;
 
     try {
       const response = await fetch('/api/generate-messages', {
@@ -159,7 +186,7 @@ export default function CoachPage() {
           },
           communications,
           channel,
-          objective,
+          objective: objectiveText,
           product: selectedProduct || customProduct || 'General offering',
           tone,
         }),
@@ -309,13 +336,25 @@ export default function CoachPage() {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               🎯 What's your objective? *
             </label>
-            <textarea
+            <select
               value={objective}
               onChange={(e) => setObjective(e.target.value)}
-              rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-md"
-              placeholder="E.g., 'Get a discovery call scheduled', 'Re-engage after they went quiet', 'Follow up on the demo we did', 'Introduce our new AI tool'"
-            />
+            >
+              <option value="">Select your objective...</option>
+              {OBJECTIVES.map((obj) => (
+                <option key={obj.value} value={obj.value}>{obj.label}</option>
+              ))}
+            </select>
+            {objective === 'other' && (
+              <textarea
+                value={customObjective}
+                onChange={(e) => setCustomObjective(e.target.value)}
+                rows={2}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md mt-2"
+                placeholder="Describe your specific objective..."
+              />
+            )}
           </div>
 
           {/* Tone */}
@@ -346,7 +385,7 @@ export default function CoachPage() {
         <div className="mt-8 pt-6 border-t">
           <button
             onClick={generateMessages}
-            disabled={isGenerating || !objective.trim()}
+            disabled={isGenerating || !objective || (objective === 'other' && !customObjective.trim())}
             className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 font-medium text-lg"
           >
             {isGenerating ? (
